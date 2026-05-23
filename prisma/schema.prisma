@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 基金基础信息，来自网络 Provider 或本地 mock 数据。
+model Fund {
+  /// 基金主键，使用稳定字符串便于 seed 幂等写入。
+  id              String           @id @default(cuid())
+  /// 基金代码，例如公募基金六位代码。
+  code            String           @unique
+  /// 基金名称。
+  name            String
+  /// 基金类型，例如股票型、混合型、债券型、指数型。
+  type            String
+  /// 基金管理人。
+  manager         String
+  /// 基金公司。
+  company         String
+  /// 风险等级，使用中文描述便于个人分析展示。
+  riskLevel       String
+  /// 跟踪指数，非指数基金可为空。
+  trackingIndex   String?
+  /// 基金成立日期。
+  inceptionDate   DateTime?
+  /// 计价币种，默认人民币。
+  currency        String           @default("CNY")
+  /// 创建时间。
+  createdAt       DateTime         @default(now())
+  /// 更新时间。
+  updatedAt       DateTime         @updatedAt
+  /// 本地持仓记录。
+  holdings        Holding[]
+  /// 基金历史净值。
+  navs            FundNav[]
+  /// 分析报告。
+  analysisReports AnalysisReport[]
+  /// 建议记录。
+  recommendations Recommendation[]
+}
+
+/// 用户本地持仓数据，仅用于个人分析。
+model Holding {
+  /// 持仓主键，使用稳定字符串便于 seed 幂等写入。
+  id              String           @id @default(cuid())
+  /// 关联基金主键。
+  fundId          String
+  /// 账户名称，例如默认账户、养老金账户。
+  accountName     String           @default("默认账户")
+  /// 持有份额。
+  units           Decimal
+  /// 平均持仓成本。
+  averageCost     Decimal
+  /// 累计投入本金。
+  totalCost       Decimal
+  /// 当前估算市值，可由后续业务逻辑更新。
+  currentValue    Decimal?
+  /// 首次建仓日期或当前批次买入日期。
+  purchaseDate    DateTime
+  /// 用户备注。
+  note            String?
+  /// 创建时间。
+  createdAt       DateTime         @default(now())
+  /// 更新时间。
+  updatedAt       DateTime         @updatedAt
+  /// 关联基金。
+  fund            Fund             @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  /// 与该持仓相关的分析报告。
+  analysisReports AnalysisReport[]
+  /// 与该持仓相关的建议记录。
+  recommendations Recommendation[]
+
+  @@index([fundId])
+}
+
+/// 基金历史净值数据，网络 Provider 不可用时可由 mock 数据提供。
+model FundNav {
+  /// 净值记录主键，使用稳定字符串便于 seed 幂等写入。
+  id             String   @id @default(cuid())
+  /// 关联基金主键。
+  fundId         String
+  /// 净值日期。
+  navDate        DateTime
+  /// 单位净值。
+  unitNav        Decimal
+  /// 累计净值。
+  accumulatedNav Decimal?
+  /// 日涨跌幅，使用小数表示，例如 0.0123 表示 1.23%。
+  dailyReturn    Decimal?
+  /// 数据来源，例如 mock、provider。
+  source         String   @default("mock")
+  /// 创建时间。
+  createdAt      DateTime @default(now())
+  /// 关联基金。
+  fund           Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@unique([fundId, navDate])
+  @@index([fundId])
+}
+
+/// 分析引擎输出的结构化报告，不直接产生买卖决策。
+model AnalysisReport {
+  /// 分析报告主键，使用稳定字符串便于 seed 幂等写入。
+  id              String           @id @default(cuid())
+  /// 关联基金主键。
+  fundId          String
+  /// 可选关联持仓主键，用于区分基金分析与持仓分析。
+  holdingId       String?
+  /// 报告日期。
+  reportDate      DateTime
+  /// 分析指标 JSON，例如波动率、回撤、收益区间等。
+  metrics         Json
+  /// 风控规则输出 JSON，例如风险命中项和风险等级。
+  riskResult      Json
+  /// 中文摘要。
+  summary         String
+  /// 统一免责声明。
+  disclaimer      String
+  /// 创建时间。
+  createdAt       DateTime         @default(now())
+  /// 关联基金。
+  fund            Fund             @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  /// 可选关联持仓。
+  holding         Holding?         @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  /// 基于本报告生成的建议记录。
+  recommendations Recommendation[]
+
+  @@index([fundId])
+  @@index([holdingId])
+}
+
+/// 建议引擎输出的结构化建议，必须由用户自行判断，不构成投资建议。
+model Recommendation {
+  /// 建议记录主键，使用稳定字符串便于 seed 幂等写入。
+  id               String          @id @default(cuid())
+  /// 关联基金主键。
+  fundId           String
+  /// 可选关联持仓主键。
+  holdingId        String?
+  /// 可选关联分析报告主键。
+  analysisReportId String?
+  /// 建议类型，例如观察、继续跟踪、人工复核。
+  actionType       String
+  /// 风控等级，例如低、中、高。
+  riskLevel        String
+  /// 建议原因 JSON，由建议引擎结构化输出。
+  reasons          Json
+  /// AI 解释 JSON，仅用于解释分析过程，不直接决定买卖。
+  aiExplanation    Json
+  /// 统一免责声明。
+  disclaimer       String
+  /// 创建时间。
+  createdAt        DateTime        @default(now())
+  /// 关联基金。
+  fund             Fund            @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  /// 可选关联持仓。
+  holding          Holding?        @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  /// 可选关联分析报告。
+  analysisReport   AnalysisReport? @relation(fields: [analysisReportId], references: [id], onDelete: SetNull)
+
+  @@index([fundId])
+  @@index([holdingId])
+  @@index([analysisReportId])
+}

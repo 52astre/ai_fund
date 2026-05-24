@@ -26,6 +26,10 @@ export default async function FundsPage({ searchParams }: FundsPageProps) {
   );
   const keyword = parsedSearchParams.success ? parsedSearchParams.data.q : "";
   const funds = await fundProvider.searchFunds(keyword);
+  const hasRealData = funds.some((fund) => !fund.isMock);
+  const sourceMessage = hasRealData
+    ? "数据来源：天天基金/东方财富"
+    : "当前为模拟数据，未成功获取互联网基金数据";
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -37,6 +41,15 @@ export default async function FundsPage({ searchParams }: FundsPageProps) {
           </h1>
           <p className="mt-4 max-w-2xl text-slate-600">
             输入基金名称或 6 位基金代码，通过统一 Provider 查询基金基础数据。
+          </p>
+          <p
+            className={`mt-4 inline-flex border px-3 py-2 text-sm font-medium ${
+              hasRealData
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            {sourceMessage}
           </p>
         </div>
 
@@ -76,6 +89,7 @@ export default async function FundsPage({ searchParams }: FundsPageProps) {
                 <th className="px-4 py-3 font-medium">基金名称</th>
                 <th className="px-4 py-3 font-medium">基金类型</th>
                 <th className="px-4 py-3 font-medium">基金规模</th>
+                <th className="px-4 py-3 font-medium">数据来源</th>
                 <th className="px-4 py-3 font-medium">操作</th>
               </tr>
             </thead>
@@ -93,6 +107,9 @@ export default async function FundsPage({ searchParams }: FundsPageProps) {
                     <td className="px-4 py-3 text-slate-700">
                       {fund.fundSize}
                     </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {fund.isMock ? "模拟数据" : "天天基金/东方财富"}
+                    </td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/funds/${fund.code}`}
@@ -106,7 +123,7 @@ export default async function FundsPage({ searchParams }: FundsPageProps) {
               ) : (
                 <tr className="bg-white">
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     未找到匹配的基金，请尝试更换基金名称或基金代码。
